@@ -38,8 +38,9 @@ Usage:
   nugetwatch scan [paths...] [flags]   scan solutions, projects or directories
   nugetwatch version                   print the version
 
-With no paths, scan reads one path per line from
-$XDG_CONFIG_HOME/nugetwatch/projects (# starts a comment).
+With no paths, scan reads one path per line (# starts a comment) from
+nugetwatch/projects in the config directory: ~/.config on Linux,
+~/Library/Application Support on macOS, %AppData% on Windows.
 
 Exit codes: 0 clean, 1 vulnerabilities found, 2 error.
 

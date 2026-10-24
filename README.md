@@ -54,11 +54,21 @@ warning and never change the exit code.
 
 ### Configured projects
 
-If you run `nugetwatch scan` without paths, it reads
-`$XDG_CONFIG_HOME/nugetwatch/projects` (usually
-`~/.config/nugetwatch/projects`). The file has one path per line, and lines
-starting with `#` are comments. A leading `~/` is expanded, and relative paths
-are resolved against your home directory.
+If you run `nugetwatch scan` without paths, it reads the `nugetwatch/projects`
+file in your config directory:
+
+| OS | Projects file |
+|---|---|
+| Linux | `$XDG_CONFIG_HOME/nugetwatch/projects` (usually `~/.config/nugetwatch/projects`) |
+| macOS | `~/Library/Application Support/nugetwatch/projects` |
+| Windows | `%AppData%\nugetwatch\projects` |
+
+If `XDG_CONFIG_HOME` is set to an absolute path, it is used on every OS. When
+the file is missing, the error message shows the exact path the tool expected.
+
+The file has one path per line, and lines starting with `#` are comments. A
+leading `~/` is expanded, and relative paths are resolved against your home
+directory.
 
 ```
 # ~/.config/nugetwatch/projects
@@ -76,31 +86,61 @@ are resolved against your home directory.
     sarif_file: nugetwatch.sarif
 ```
 
-## Daily scans with systemd
+## Scheduled scans
 
-`contrib/systemd` contains a user service and timer. The timer runs once a
-day with `Persistent=true`, so if the laptop was off at the scheduled time,
-the scan runs as soon as it's back on.
+nugetwatch doesn't run a daemon. Use your OS scheduler to run `nugetwatch scan`
+on a schedule. Each example below shows how to run on weekdays at 10:00 or daily,
+and catches up on a missed run when the machine comes back (except where noted).
+
+Before you schedule anything, list your projects in the
+[projects file](#configured-projects) and run `nugetwatch scan` once by hand.
+
+### Linux (systemd user timer)
+
+`contrib/systemd` contains a user service and timer. The timer runs daily by
+default. It sets `Persistent=true`, so if the laptop was off at the scheduled
+time, the scan runs when it's back on.
 
 ```sh
 install -Dm755 nugetwatch ~/.local/bin/nugetwatch      # or go install, adjust ExecStart
 install -Dm644 contrib/systemd/nugetwatch.service ~/.config/systemd/user/
 install -Dm644 contrib/systemd/nugetwatch.timer   ~/.config/systemd/user/
 systemctl --user daemon-reload
-systemctl --user enable --now nugetwatch.timer
 
-systemctl --user start nugetwatch.service   # run once now
-journalctl --user -u nugetwatch.service     # see the report
+systemctl --user start nugetwatch.service          # run once now
+journalctl --user -u nugetwatch.service -n 50      # see the report
+systemctl --user enable --now nugetwatch.timer     # turn on the schedule
+systemctl --user list-timers nugetwatch.timer      # check the next run
 ```
 
 The service runs `nugetwatch scan --notify` and treats exit code `1` as a
-success, so finding vulnerabilities doesn't mark the unit as failed.
+success, so finding vulnerabilities doesn't mark the unit as failed. If you
+also want a notification on clean runs, use `--notify-always`.
 
-**Notifications from systemd:** `notify-send` needs the session D-Bus and a
+**Changing the schedule.** To keep the shipped unit unchanged, add a drop-in
+override instead of editing it. For weekdays at 10:00 with no random delay:
+
+```sh
+mkdir -p ~/.config/systemd/user/nugetwatch.timer.d
+cat > ~/.config/systemd/user/nugetwatch.timer.d/schedule.conf <<'EOF'
+[Timer]
+OnCalendar=
+OnCalendar=Mon..Fri 10:00
+RandomizedDelaySec=0
+EOF
+systemctl --user daemon-reload
+systemd-analyze calendar 'Mon..Fri 10:00'          # preview the next runs
+```
+
+The empty `OnCalendar=` line clears the default `daily` schedule. Without it,
+the timer would fire on both schedules.
+
+**Notifications from systemd.** `notify-send` needs the session D-Bus and a
 running notification daemon, such as mako, dunst, swaync or the one your
 desktop provides. Most systemd user sessions already have
-`DBUS_SESSION_BUS_ADDRESS` set. If notifications work in a terminal but not
-from the timer, uncomment this line in the service:
+`DBUS_SESSION_BUS_ADDRESS` set; you can check with
+`systemctl --user show-environment`. If notifications work in a terminal but
+not from the timer, uncomment this line in the service:
 
 ```ini
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus
@@ -109,6 +149,58 @@ Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus
 Or import the variable from your compositor or WM startup, for example with
 `exec-once = dbus-update-activation-environment --systemd DBUS_SESSION_BUS_ADDRESS`
 in Hyprland.
+
+### macOS (launchd)
+
+`contrib/launchd/io.github.erion14.nugetwatch.plist` is a LaunchAgent that runs
+on weekdays at 10:00. launchd doesn't expand `~`, so the plist uses
+`/usr/local/bin/nugetwatch`. Install the binary there, or edit the path to
+wherever it lives (for example `/Users/you/go/bin/nugetwatch`).
+
+```sh
+sudo install -m755 nugetwatch /usr/local/bin/nugetwatch
+cp contrib/launchd/io.github.erion14.nugetwatch.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.github.erion14.nugetwatch.plist
+
+launchctl kickstart gui/$(id -u)/io.github.erion14.nugetwatch   # run once now
+cat /tmp/nugetwatch.log                                          # see the report
+```
+
+If the Mac is asleep at 10:00, launchd runs the job when it wakes up. If it is
+shut down, that run is skipped. For a daily schedule, replace the
+`StartCalendarInterval` array with a single `<dict>` that contains only `Hour`
+and `Minute`. After you edit the plist, reload it with
+`launchctl bootout gui/$(id -u)/io.github.erion14.nugetwatch` followed by the
+`bootstrap` command above.
+
+Desktop notifications aren't implemented on macOS yet. Check the log, or the
+exit code with `launchctl print gui/$(id -u)/io.github.erion14.nugetwatch`.
+
+### Windows (Task Scheduler)
+
+In PowerShell, adjust `$exe` to wherever you put `nugetwatch.exe`:
+
+```powershell
+$exe = "$env:LOCALAPPDATA\Programs\nugetwatch\nugetwatch.exe"
+$log = "$env:LOCALAPPDATA\nugetwatch\last-scan.txt"
+New-Item -ItemType Directory -Force (Split-Path $log) | Out-Null
+
+$action   = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"`"$exe`" scan > `"$log`" 2>&1`""
+$trigger  = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday,Tuesday,Wednesday,Thursday,Friday -At 10:00
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable
+Register-ScheduledTask -TaskName "nugetwatch" -Action $action -Trigger $trigger -Settings $settings
+
+Start-ScheduledTask -TaskName "nugetwatch"     # run once now
+Get-Content $log                               # see the report
+```
+
+`-StartWhenAvailable` runs a missed scan as soon as possible after the PC is
+back on. For a daily schedule, use `New-ScheduledTaskTrigger -Daily -At 10:00`.
+To remove the task, run `Unregister-ScheduledTask -TaskName nugetwatch`.
+
+Desktop notifications aren't implemented on Windows yet. Check the log, or
+**Last Run Result** in Task Scheduler: `0x1` means vulnerabilities were found
+and `0x2` means an error.
 
 ## How it works
 
@@ -125,7 +217,9 @@ in Hyprland.
    resource. It then downloads the pages listed there: a `base` page, plus an
    `update` page with anything newer. Each page maps a lower-case package ID
    to entries like `{"url", "severity": 0-3, "versions": "(, 13.0.1)"}`.
-4. **Caching.** Responses are stored in `$XDG_CACHE_HOME/nugetwatch`. The tool
+4. **Caching.** Responses are stored in a `nugetwatch` folder in your cache
+   directory: `$XDG_CACHE_HOME` (usually `~/.cache`) on Linux,
+   `~/Library/Caches` on macOS and `%LocalAppData%` on Windows. The tool
    follows the server's `Cache-Control: max-age` (6 hours for the indexes, 7
    days for data pages) and then revalidates with `If-None-Match` /
    `If-Modified-Since`. In most runs it makes no requests or a few `304`s.

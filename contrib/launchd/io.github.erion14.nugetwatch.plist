@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  macOS LaunchAgent: scan the projects listed in
+  ~/Library/Application Support/nugetwatch/projects on weekdays at 10:00.
+  Install into ~/Library/LaunchAgents/ (see README). launchd does not expand
+  "~", so ProgramArguments must be an absolute path.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.github.erion14.nugetwatch</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/nugetwatch</string>
+    <string>scan</string>
+  </array>
+
+  <!-- Weekday 1 = Monday ... 5 = Friday. -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>10</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/nugetwatch.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/nugetwatch.log</string>
+
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>
