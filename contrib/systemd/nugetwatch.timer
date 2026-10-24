@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily NuGet vulnerability scan
+
+[Timer]
+OnCalendar=daily
+# Run at the next boot/login if the laptop was off at the scheduled time.
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

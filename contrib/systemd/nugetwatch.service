@@ -1,0 +1,14 @@
+[Unit]
+Description=Scan .NET projects for vulnerable NuGet packages
+Documentation=https://github.com/Erion14/nugetwatch
+
+[Service]
+Type=oneshot
+# Reads project paths from ~/.config/nugetwatch/projects.
+ExecStart=%h/.local/bin/nugetwatch scan --notify
+# Exit code 1 means "vulnerabilities found", not "the unit failed".
+SuccessExitStatus=1
+# notify-send talks to the session bus. Most systemd user sessions already
+# export this; uncomment if notifications don't show up from the timer.
+#Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=%t/bus
+Nice=10

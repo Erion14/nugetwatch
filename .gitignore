@@ -1,0 +1,10 @@
+/nugetwatch
+/dist/
+*.test
+*.out
+coverage.*
+
+# .NET restore output, except the committed test fixture
+bin/
+obj/
+!cmd/nugetwatch/testdata/**/obj/

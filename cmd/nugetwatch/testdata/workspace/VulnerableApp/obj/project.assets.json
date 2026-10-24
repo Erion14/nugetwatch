@@ -1,0 +1,48 @@
+{
+  "version": 3,
+  "targets": {
+    "net8.0": {
+      "Azure.Core/1.35.0": {
+        "type": "package",
+        "dependencies": {
+          "Microsoft.Bcl.AsyncInterfaces": "1.1.1",
+          "System.Text.Json": "8.0.0"
+        }
+      },
+      "Azure.Identity/1.10.0": {
+        "type": "package",
+        "dependencies": {
+          "Azure.Core": "1.35.0"
+        }
+      },
+      "Microsoft.Bcl.AsyncInterfaces/1.1.1": {
+        "type": "package"
+      },
+      "Newtonsoft.Json/12.0.1": {
+        "type": "package"
+      },
+      "System.Text.Json/8.0.0": {
+        "type": "package"
+      }
+    }
+  },
+  "libraries": {},
+  "projectFileDependencyGroups": {
+    "net8.0": [
+      "Azure.Identity >= 1.10.0",
+      "Newtonsoft.Json >= 12.0.1"
+    ]
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectName": "VulnerableApp",
+      "projectStyle": "PackageReference"
+    },
+    "frameworks": {
+      "net8.0": {
+        "targetAlias": "net8.0"
+      }
+    }
+  }
+}
