@@ -110,7 +110,7 @@ func TestScanFindsDirectAndTransitiveVulnerabilities(t *testing.T) {
 	if strings.Contains(out, "Azure.Identity 1.10.0") {
 		t.Errorf("Azure.Identity 1.10.0 reported but is outside the advisory range:\n%s", out)
 	}
-	want := "--app-name=nugetwatch|--urgency=critical|nugetwatch|2 vulnerable packages across 1 project (2 High); 1 project not scanned|\n"
+	want := "--app-name=nugetwatch|--urgency=critical|nugetwatch|2 vulnerable packages across 1 project (2 High); 1 project not scanned\nHigh Newtonsoft.Json 12.0.1: VulnerableApp\nHigh System.Text.Json 8.0.0: VulnerableApp|\n"
 	if got := readLog(t, log); got != want {
 		t.Errorf("notification = %q, want %q", got, want)
 	}

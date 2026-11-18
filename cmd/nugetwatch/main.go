@@ -189,6 +189,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	if wantNotify && (code != exitClean || *notifyAlways) {
 		body := sum.Message()
+		if d := sum.Details(); d != "" {
+			body += "\n" + d
+		}
 		if rep.Feed.Stale {
 			body += "\n(feed unreachable, using cached data)"
 		}

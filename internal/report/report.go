@@ -73,12 +73,21 @@ type Summary struct {
 	VulnerableProjects int
 	VulnerablePackages int // distinct package@version across projects
 	BySeverity         map[feed.Severity]int
+	Packages           []PackageHit // one per distinct package@version, highest severity first
+}
+
+// PackageHit is a vulnerable package@version and the projects that resolve it.
+type PackageHit struct {
+	Package  string
+	Version  string
+	Severity feed.Severity
+	Projects []string
 }
 
 // Summarize counts findings that meet the severity threshold.
 func (r *Report) Summarize(min feed.Severity) Summary {
 	s := Summary{Projects: len(r.Projects), BySeverity: map[feed.Severity]int{}}
-	seen := map[string]bool{}
+	seen := map[string]int{} // package@version -> index into s.Packages
 	for _, p := range r.Projects {
 		if p.Error != "" {
 			s.Failed++
@@ -91,17 +100,45 @@ func (r *Report) Summarize(min feed.Severity) Summary {
 			}
 			vulnerable = true
 			key := strings.ToLower(f.Package + "@" + f.Version)
-			if !seen[key] {
-				seen[key] = true
+			i, ok := seen[key]
+			if !ok {
+				i = len(s.Packages)
+				seen[key] = i
+				s.Packages = append(s.Packages, PackageHit{Package: f.Package, Version: f.Version, Severity: f.Severity})
 				s.VulnerablePackages++
 				s.BySeverity[f.Severity]++
+			}
+			if hit := &s.Packages[i]; !slices.Contains(hit.Projects, p.Name) {
+				hit.Projects = append(hit.Projects, p.Name)
 			}
 		}
 		if vulnerable {
 			s.VulnerableProjects++
 		}
 	}
+	slices.SortStableFunc(s.Packages, func(a, b PackageHit) int { return int(b.Severity - a.Severity) })
 	return s
+}
+
+// Details lists each vulnerable package with the projects that use it, one per
+// line, e.g. "High AutoMapper 16.1.1: Api, Worker +2 more". Output is capped so
+// it stays readable in a desktop notification.
+func (s Summary) Details() string {
+	const maxPackages, maxProjects = 5, 4
+	var lines []string
+	for i, h := range s.Packages {
+		if i == maxPackages {
+			lines = append(lines, fmt.Sprintf("+%s", plural(len(s.Packages)-maxPackages, "more package")))
+			break
+		}
+		names := h.Projects
+		more := ""
+		if len(names) > maxProjects {
+			names, more = names[:maxProjects], fmt.Sprintf(" +%d more", len(names)-maxProjects)
+		}
+		lines = append(lines, fmt.Sprintf("%s %s %s: %s%s", h.Severity, h.Package, h.Version, strings.Join(names, ", "), more))
+	}
+	return strings.Join(lines, "\n")
 }
 
 // Message is a one-line summary, e.g.
